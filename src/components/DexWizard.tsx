@@ -326,7 +326,6 @@ export function DexWizard() {
           {address ? (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--muted)] px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]" />
                 <span className="font-mono text-sm">{truncate(address)}</span>
               </span>
               <span className="text-xs text-muted-foreground">
@@ -393,6 +392,22 @@ export function DexWizard() {
               </p>
             </div>
           )}
+          <div className="mt-5">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+              Or claim GIWA testnet ETH directly:
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <a href="https://faucet.giwa.io/#/" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm text-center">
+                GIWA official faucet ↗
+              </a>
+              <a href="https://faucet.trade/giwa-sepolia-eth-faucet" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm text-center">
+                Faucet.trade ↗
+              </a>
+              <a href="https://faucet.lambda256.io/giwa-sepolia" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm text-center">
+                Lambda256 ↗
+              </a>
+            </div>
+          </div>
           <div className="mt-5 rounded-lg border border-border bg-[var(--muted)] p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -563,7 +578,6 @@ function TopBar({
             My Deployments
           </button>
           <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-mono">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
             {truncate(address)}
           </span>
           <button className="btn-outline text-xs" onClick={onDisconnect}>
@@ -580,7 +594,12 @@ function TopBar({
 
 function Header() {
   return (
-    <div className="mb-8 text-center">
+    <div className="mb-8 flex flex-col items-center text-center">
+      <img
+        src="/giwa-logo.jpg"
+        alt="GIWA logo"
+        className="mb-3 h-16 w-16 rounded-lg object-cover shadow-sm"
+      />
       <h1 className="text-5xl font-extrabold tracking-tight text-[var(--primary)] sm:text-6xl">
         GIWA
       </h1>
