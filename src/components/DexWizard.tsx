@@ -541,6 +541,32 @@ export function DexWizard() {
           ♥ Support this project
         </button>
         <span>Stateless deploys. No accounts. No keys. Your wallet signs everything.</span>
+        <div className="mt-3 flex flex-col items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            My Other Projects
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {[
+              "https://test-hub.xyz/",
+              "https://litdex.test-hub.xyz/",
+              "https://zkbet.test-hub.xyz/",
+              "https://quipstats.test-hub.xyz/",
+            ].map((href) => {
+              const label = href.replace(/^https?:\/\//, "").replace(/\/$/, "");
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full border border-border bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--primary)]/80 transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]"
+                >
+                  {label}
+                </a>
+              );
+            })}
+          </div>
+        </div>
       </footer>
 
       {historyOpen && (
