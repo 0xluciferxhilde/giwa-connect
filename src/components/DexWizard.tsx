@@ -326,7 +326,6 @@ export function DexWizard() {
           {address ? (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--muted)] px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]" />
                 <span className="font-mono text-sm">{truncate(address)}</span>
               </span>
               <span className="text-xs text-muted-foreground">
