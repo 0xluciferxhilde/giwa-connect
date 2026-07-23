@@ -1,24 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { DexWizard } from "@/components/DexWizard";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "GIWA DEX Deployer — Ship your own DEX on GIWA testnet" },
+      {
+        name: "description",
+        content:
+          "Deploy your own DEX (WETH, Factory, Router) to the GIWA testnet from your wallet in four guided steps. No keys, no accounts, no backend.",
+      },
+      { property: "og:title", content: "GIWA DEX Deployer" },
+      {
+        property: "og:description",
+        content:
+          "Deploy WETH + Factory + Router to GIWA testnet directly from your wallet in 4 steps.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
+  return <DexWizard />;
 }
