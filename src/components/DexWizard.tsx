@@ -841,7 +841,7 @@ function HistoryPanel({
           {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
           {!loading && (!history || history.length === 0) && (
             <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              You haven't deployed a DEX yet — head to Step 4 to ship one.
+              You haven't deployed a DEX yet. Head to Step 4 to ship one.
             </div>
           )}
           {history?.map((d) => (
