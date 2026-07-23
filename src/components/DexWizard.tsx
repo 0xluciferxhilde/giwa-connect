@@ -769,7 +769,7 @@ function SuccessSummary({
   const [weth, factory, router] = steps;
   const summary = useMemo(
     () =>
-      `${name} (${symbol}) — GIWA Testnet\nWETH:    ${weth.address}\nFactory: ${factory.address}\nRouter:  ${router.address}\nExplorer: ${EXPLORER}/address/${router.address}`,
+      `${name} (${symbol}) on GIWA Testnet\nWETH:    ${weth.address}\nFactory: ${factory.address}\nRouter:  ${router.address}\nExplorer: ${EXPLORER}/address/${router.address}`,
     [name, symbol, weth.address, factory.address, router.address],
   );
   const [copied, setCopied] = useState(false);
