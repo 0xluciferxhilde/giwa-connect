@@ -596,7 +596,7 @@ function Header() {
   return (
     <div className="mb-8 flex flex-col items-center text-center">
       <img
-        src="/giwa-logo.jpg"
+        src="/giwa-logo.png"
         alt="GIWA logo"
         className="mb-3 h-16 w-16 rounded-lg object-cover shadow-sm"
       />
