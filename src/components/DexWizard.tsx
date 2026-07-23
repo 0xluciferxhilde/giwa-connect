@@ -408,6 +408,7 @@ export function DexWizard() {
               </a>
             </div>
           </div>
+          <div className="mt-5 rounded-lg border border-border bg-[var(--muted)] p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
