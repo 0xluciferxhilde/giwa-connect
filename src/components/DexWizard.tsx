@@ -598,7 +598,7 @@ function Header() {
       <img
         src="/giwa-logo.png"
         alt="GIWA logo"
-        className="mb-3 h-16 w-16 rounded-lg object-cover shadow-sm"
+        className="mb-3 h-16 w-16 object-contain"
       />
       <h1 className="text-5xl font-extrabold tracking-tight text-[var(--primary)] sm:text-6xl">
         GIWA
