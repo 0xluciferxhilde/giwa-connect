@@ -32,24 +32,24 @@
 
 :root {
   --radius: 0.75rem;
-  /* Dark crypto/testnet theme */
-  --background: oklch(0.16 0.02 260);
-  --foreground: oklch(0.97 0.005 260);
-  --card: oklch(0.20 0.025 260);
-  --card-foreground: oklch(0.97 0.005 260);
-  --muted: oklch(0.26 0.02 260);
-  --muted-foreground: oklch(0.70 0.02 260);
-  --primary: oklch(0.78 0.18 155); /* neon-mint accent */
-  --primary-foreground: oklch(0.16 0.02 260);
-  --accent: oklch(0.70 0.16 220);
-  --accent-foreground: oklch(0.16 0.02 260);
-  --border: oklch(0.30 0.02 260);
-  --input: oklch(0.26 0.02 260);
-  --ring: oklch(0.78 0.18 155);
-  --success: oklch(0.78 0.18 155);
-  --warning: oklch(0.80 0.16 80);
-  --destructive: oklch(0.65 0.22 25);
-  --destructive-foreground: oklch(0.98 0.005 260);
+  /* Clean white + navy theme */
+  --background: #ffffff;
+  --foreground: #0b1220;
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --muted: #f3f5f9;
+  --muted-foreground: #4b5563;
+  --primary: #1e3a8a;                 /* navy */
+  --primary-foreground: #ffffff;
+  --accent: #2749a8;
+  --accent-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #f3f5f9;
+  --ring: #1e3a8a;
+  --success: #15803d;
+  --warning: #b45309;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
 }
 
 @layer base {
@@ -62,18 +62,15 @@
     min-height: 100vh;
   }
   body {
-    background-image:
-      radial-gradient(1200px 600px at 10% -10%, oklch(0.30 0.10 200 / 0.35), transparent 60%),
-      radial-gradient(900px 500px at 100% 10%, oklch(0.30 0.14 155 / 0.25), transparent 60%);
-    background-attachment: fixed;
+    background-color: #fafafa;
   }
 }
 
 @utility card-panel {
-  background: color-mix(in oklch, var(--card) 85%, transparent);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 @utility btn-primary {
@@ -84,16 +81,32 @@
   font-weight: 600;
   transition: opacity 0.15s, transform 0.15s;
 }
-@utility btn-primary:hover { opacity: 0.9; }
+@utility btn-primary:hover { opacity: 0.92; }
 @utility btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 @utility btn-outline {
   background: transparent;
-  color: var(--foreground);
-  border: 1px solid var(--border);
+  color: var(--primary);
+  border: 1px solid var(--primary);
   padding: 0.6rem 1rem;
   border-radius: calc(var(--radius) - 2px);
   font-weight: 500;
   transition: background 0.15s;
 }
-@utility btn-outline:hover { background: var(--muted); }
+@utility btn-outline:hover { background: color-mix(in oklab, var(--primary) 8%, transparent); }
+@utility btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@utility input-field {
+  background: #ffffff;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  width: 100%;
+  font-size: 0.9rem;
+}
+@utility input-field:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
+}
