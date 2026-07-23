@@ -392,7 +392,22 @@ export function DexWizard() {
               </p>
             </div>
           )}
-          <div className="mt-5 rounded-lg border border-border bg-[var(--muted)] p-4">
+          <div className="mt-5">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+              Or claim GIWA testnet ETH directly:
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <a href="https://faucet.giwa.io/#/" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm text-center">
+                GIWA official faucet ↗
+              </a>
+              <a href="https://faucet.trade/giwa-sepolia-eth-faucet" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm text-center">
+                Faucet.trade ↗
+              </a>
+              <a href="https://faucet.lambda256.io/giwa-sepolia" target="_blank" rel="noopener noreferrer" className="btn-outline text-sm text-center">
+                Lambda256 ↗
+              </a>
+            </div>
+          </div>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
