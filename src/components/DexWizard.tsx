@@ -320,7 +320,7 @@ export function DexWizard() {
       <div className="mt-8 space-y-6">
         <StepCard n={1} title={STEPS[0]} active={step === 1} done={step > 1}>
           <p className="text-sm text-muted-foreground">
-            MetaMask popup — you approve, we only ever see your public address. We never ask for
+            MetaMask popup. You approve, and we only ever see your public address. We never ask for
             private keys or seed phrases.
           </p>
           {address ? (
