@@ -1,14 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
-import { ContractFactory, type BrowserProvider, type JsonRpcSigner } from "ethers";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  ContractFactory,
+  Contract,
+  parseUnits,
+  type BrowserProvider,
+  type JsonRpcSigner,
+} from "ethers";
 import {
   api,
   EXPLORER,
+  GIWA_CHAIN,
+  BASE_CHAIN,
+  BASE_USDC,
+  BASE_USDC_DECIMALS,
+  DONATION_ADDRESS,
   type BalanceResp,
   type DeployInfoResp,
+  type DeploymentRecord,
   type FaucetsResp,
-  type PoolNameResp,
 } from "@/lib/giwa";
-import { connectWallet, ensureGiwaNetwork, getProvider, truncate } from "@/lib/wallet";
+import {
+  connectWallet,
+  ensureBaseNetwork,
+  ensureGiwaNetwork,
+  getCurrentChainIdHex,
+  getEthereum,
+  getProvider,
+  truncate,
+} from "@/lib/wallet";
 
 type StepStatus = "idle" | "pending" | "awaiting" | "confirming" | "done" | "error";
 
@@ -23,9 +43,22 @@ type DeployStep = {
 
 const STEPS = ["Connect Wallet", "Get Sepolia ETH", "Bridge to GIWA", "Deploy Your DEX"] as const;
 
+const ERC20_TRANSFER_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address a) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
+
+const initialDeploySteps = (): DeployStep[] => [
+  { key: "weth", label: "Deploy WETH", status: "idle" },
+  { key: "factory", label: "Deploy Factory", status: "idle" },
+  { key: "router", label: "Deploy Router", status: "idle" },
+];
+
 export function DexWizard() {
   const [step, setStep] = useState(1);
   const [address, setAddress] = useState<string | null>(null);
+  const [chainIdHex, setChainIdHex] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
 
@@ -37,16 +70,33 @@ export function DexWizard() {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
 
-  // step 4
-  const [pool, setPool] = useState<PoolNameResp | null>(null);
+  // step 4 form
+  const [dexName, setDexName] = useState("");
+  const [dexSymbol, setDexSymbol] = useState("");
   const [deployInfo, setDeployInfo] = useState<DeployInfoResp | null>(null);
   const [prepError, setPrepError] = useState<string | null>(null);
-  const [deploySteps, setDeploySteps] = useState<DeployStep[]>([
-    { key: "weth", label: "Deploy WETH", status: "idle" },
-    { key: "factory", label: "Deploy Factory", status: "idle" },
-    { key: "router", label: "Deploy Router", status: "idle" },
-  ]);
+  const [preparing, setPreparing] = useState(false);
+  const [deploySteps, setDeploySteps] = useState<DeployStep[]>(initialDeploySteps);
   const [deploying, setDeploying] = useState(false);
+
+  // history + donation
+  const [history, setHistory] = useState<DeploymentRecord[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
+
+  const resetAccountState = useCallback(() => {
+    setBalance(null);
+    setBalanceError(null);
+    setDexName("");
+    setDexSymbol("");
+    setDeployInfo(null);
+    setPrepError(null);
+    setDeploySteps(initialDeploySteps());
+    setDeploying(false);
+    setHistory(null);
+    setStep(1);
+  }, []);
 
   // Load faucets when step 2 opens
   useEffect(() => {
@@ -55,46 +105,38 @@ export function DexWizard() {
     }
   }, [step, faucets]);
 
-  // Load pool + deploy info when step 4 opens
+  // Wallet event listeners
   useEffect(() => {
-    if (step !== 4 || pool) return;
-    (async () => {
-      try {
-        const p = await api.poolName();
-        setPool(p);
-        const info = await api.deployInfo(p.name, p.symbol);
-        setDeployInfo(info);
-      } catch (e: any) {
-        setPrepError(e?.message ?? "Failed to load deploy info");
-      }
-    })();
-  }, [step, pool]);
-
-  // Wallet account change tracking
-  useEffect(() => {
-    const eth = (typeof window !== "undefined" ? window.ethereum : undefined);
+    const eth = typeof window !== "undefined" ? window.ethereum : undefined;
     if (!eth?.on) return;
-    const handler = (accs: string[]) => setAddress(accs[0] ?? null);
-    eth.on("accountsChanged", handler);
-    return () => eth.removeListener?.("accountsChanged", handler);
+    const onAccounts = (accs: string[]) => {
+      const next = accs?.[0] ?? null;
+      if (!next) {
+        setAddress(null);
+        resetAccountState();
+        return;
+      }
+      // switch to fresh state for new address
+      resetAccountState();
+      setAddress(next);
+      setStep(2);
+    };
+    const onChain = (cid: string) => setChainIdHex(cid);
+    eth.on("accountsChanged", onAccounts);
+    eth.on("chainChanged", onChain);
+    return () => {
+      eth.removeListener?.("accountsChanged", onAccounts);
+      eth.removeListener?.("chainChanged", onChain);
+    };
+  }, [resetAccountState]);
+
+  // On mount: probe chain
+  useEffect(() => {
+    getCurrentChainIdHex().then(setChainIdHex).catch(() => {});
   }, []);
 
-  async function handleConnect() {
-    setConnectError(null);
-    setConnecting(true);
-    try {
-      const a = await connectWallet();
-      await ensureGiwaNetwork();
-      setAddress(a);
-      setStep((s) => Math.max(s, 2));
-    } catch (e: any) {
-      setConnectError(e?.message ?? "Failed to connect");
-    } finally {
-      setConnecting(false);
-    }
-  }
-
-  async function refreshBalance() {
+  // Balance load on step 3
+  const refreshBalance = useCallback(async () => {
     if (!address) return;
     setBalanceLoading(true);
     setBalanceError(null);
@@ -106,32 +148,88 @@ export function DexWizard() {
     } finally {
       setBalanceLoading(false);
     }
-  }
+  }, [address]);
 
   useEffect(() => {
     if (step === 3 && address && !balance) refreshBalance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, address]);
+  }, [step, address, balance, refreshBalance]);
+
+  // History load whenever address changes
+  const refreshHistory = useCallback(async (a: string) => {
+    setHistoryLoading(true);
+    try {
+      const res = await api.listDeployments(a);
+      setHistory(res.deployments);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (address) refreshHistory(address);
+    else setHistory(null);
+  }, [address, refreshHistory]);
+
+  async function handleConnect() {
+    setConnectError(null);
+    setConnecting(true);
+    try {
+      const a = await connectWallet();
+      await ensureGiwaNetwork();
+      setAddress(a);
+      setChainIdHex(await getCurrentChainIdHex());
+      setStep(2);
+    } catch (e: any) {
+      setConnectError(e?.message ?? "Failed to connect");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  function handleDisconnect() {
+    setAddress(null);
+    resetAccountState();
+  }
+
+  const nameValid = dexName.trim().length >= 1 && dexName.trim().length <= 32;
+  const symbolTrim = dexSymbol.trim();
+  const symbolValid = /^[A-Za-z0-9]{2,10}$/.test(symbolTrim);
+  const formValid = nameValid && symbolValid;
+
+  async function startDeploy() {
+    if (!formValid || !address) return;
+    setPrepError(null);
+    setPreparing(true);
+    try {
+      const info = await api.deployInfo(dexName.trim(), symbolTrim);
+      setDeployInfo(info);
+      await runDeploy(info);
+    } catch (e: any) {
+      setPrepError(e?.message ?? "Failed to prepare deployment");
+    } finally {
+      setPreparing(false);
+    }
+  }
 
   function updateDeployStep(key: DeployStep["key"], patch: Partial<DeployStep>) {
     setDeploySteps((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   }
 
-  async function runDeploy() {
-    if (!deployInfo || !address) return;
+  async function runDeploy(info: DeployInfoResp) {
+    if (!address) return;
     setDeploying(true);
+    // reset step statuses
+    setDeploySteps(initialDeploySteps());
     try {
       await ensureGiwaNetwork();
       const provider: BrowserProvider = await getProvider();
       const signer: JsonRpcSigner = await provider.getSigner();
 
-      // 1) WETH
-      updateDeployStep("weth", { status: "awaiting", error: undefined });
-      const wethFactory = new ContractFactory(
-        deployInfo.weth.abi,
-        deployInfo.weth.bytecode,
-        signer,
-      );
+      // WETH
+      updateDeployStep("weth", { status: "awaiting" });
+      const wethFactory = new ContractFactory(info.weth.abi, info.weth.bytecode, signer);
       const weth = await wethFactory.deploy();
       const wethTx = weth.deploymentTransaction();
       updateDeployStep("weth", { status: "confirming", txHash: wethTx?.hash });
@@ -139,36 +237,46 @@ export function DexWizard() {
       const wethAddr = await weth.getAddress();
       updateDeployStep("weth", { status: "done", address: wethAddr });
 
-      // 2) Factory (name, feeToSetter)
+      // Factory
       updateDeployStep("factory", { status: "awaiting" });
-      const factoryFactory = new ContractFactory(
-        deployInfo.factory.abi,
-        deployInfo.factory.bytecode,
-        signer,
-      );
-      const factory = await factoryFactory.deploy(deployInfo.dexName, address);
+      const factoryFactory = new ContractFactory(info.factory.abi, info.factory.bytecode, signer);
+      const factory = await factoryFactory.deploy(info.dexName, address);
       const facTx = factory.deploymentTransaction();
       updateDeployStep("factory", { status: "confirming", txHash: facTx?.hash });
       await factory.waitForDeployment();
       const factoryAddr = await factory.getAddress();
       updateDeployStep("factory", { status: "done", address: factoryAddr });
 
-      // 3) Router (factory, weth)
+      // Router
       updateDeployStep("router", { status: "awaiting" });
-      const routerFactory = new ContractFactory(
-        deployInfo.router.abi,
-        deployInfo.router.bytecode,
-        signer,
-      );
+      const routerFactory = new ContractFactory(info.router.abi, info.router.bytecode, signer);
       const router = await routerFactory.deploy(factoryAddr, wethAddr);
       const rTx = router.deploymentTransaction();
       updateDeployStep("router", { status: "confirming", txHash: rTx?.hash });
       await router.waitForDeployment();
       const routerAddr = await router.getAddress();
       updateDeployStep("router", { status: "done", address: routerAddr });
+
+      // Save to history
+      try {
+        const saved = await api.saveDeployment({
+          deployerAddress: address,
+          dexName: info.dexName,
+          dexSymbol: info.dexSymbol,
+          wethAddress: wethAddr,
+          factoryAddress: factoryAddr,
+          routerAddress: routerAddr,
+          wethTxHash: wethTx?.hash,
+          factoryTxHash: facTx?.hash,
+          routerTxHash: rTx?.hash,
+        });
+        setHistory((prev) => (prev ? [saved, ...prev] : [saved]));
+      } catch {
+        // non-fatal — still refresh
+        refreshHistory(address);
+      }
     } catch (e: any) {
       const msg = decodeWalletError(e);
-      // Mark the current in-progress step as errored
       setDeploySteps((prev) => {
         const idx = prev.findIndex((s) => s.status === "awaiting" || s.status === "confirming");
         if (idx === -1) return prev;
@@ -182,30 +290,55 @@ export function DexWizard() {
   }
 
   const allDone = deploySteps.every((s) => s.status === "done");
+  const onGiwa = chainIdHex?.toLowerCase() === GIWA_CHAIN.chainIdHex.toLowerCase();
+  const wrongChain = !!address && chainIdHex !== null && !onGiwa;
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-16">
+      <TopBar
+        address={address}
+        onOpenHistory={() => setHistoryOpen(true)}
+        onOpenDonate={() => setDonateOpen(true)}
+        onDisconnect={handleDisconnect}
+      />
       <Header />
+
+      {wrongChain && (
+        <div className="mb-6 rounded-lg border border-[var(--warning)]/40 bg-[color-mix(in_oklab,var(--warning)_10%,transparent)] p-3 text-sm">
+          Your wallet is on a different network.
+          <button
+            className="ml-2 underline font-medium"
+            onClick={() => ensureGiwaNetwork().catch((e) => toast.error(decodeWalletError(e)))}
+          >
+            Switch to GIWA Testnet
+          </button>
+        </div>
+      )}
+
       <ProgressBar current={step} />
 
       <div className="mt-8 space-y-6">
         <StepCard n={1} title={STEPS[0]} active={step === 1} done={step > 1}>
           <p className="text-sm text-muted-foreground">
-            MetaMask popup — you approve, we only ever see your public address.
+            MetaMask popup — you approve, we only ever see your public address. We never ask for
+            private keys or seed phrases.
           </p>
           {address ? (
-            <div className="mt-4 flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]" />
-              <span className="font-mono text-sm">{truncate(address)}</span>
-              <span className="text-xs text-muted-foreground">connected · GIWA testnet</span>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--muted)] px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]" />
+                <span className="font-mono text-sm">{truncate(address)}</span>
+              </span>
+              <span className="text-xs text-muted-foreground">
+                connected · {onGiwa ? "GIWA testnet" : "wrong network"}
+              </span>
+              <button className="btn-outline text-xs" onClick={handleDisconnect}>
+                Disconnect
+              </button>
             </div>
           ) : (
             <div className="mt-4">
-              <button
-                className="btn-primary"
-                onClick={handleConnect}
-                disabled={connecting}
-              >
+              <button className="btn-primary" onClick={handleConnect} disabled={connecting}>
                 {connecting ? "Connecting…" : "Connect Wallet"}
               </button>
               {connectError && <ErrorLine msg={connectError} />}
@@ -215,8 +348,8 @@ export function DexWizard() {
 
         <StepCard n={2} title={STEPS[1]} active={step === 2} done={step > 2} locked={step < 2}>
           <p className="text-sm text-muted-foreground">
-            We check your balance and link out to faucets. Claiming happens on their site, in your
-            wallet.
+            Grab test ETH on Sepolia from any of these faucets. Claiming happens on their site, in
+            your wallet.
           </p>
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {faucets?.sepoliaFaucets.map((f) => (
@@ -260,7 +393,7 @@ export function DexWizard() {
               </p>
             </div>
           )}
-          <div className="mt-5 rounded-lg border border-border bg-[var(--muted)]/40 p-4">
+          <div className="mt-5 rounded-lg border border-border bg-[var(--muted)] p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -270,7 +403,11 @@ export function DexWizard() {
                   {balance ? `${balance.balanceEth} ETH` : balanceLoading ? "…" : "—"}
                 </div>
               </div>
-              <button className="btn-outline text-sm" onClick={refreshBalance} disabled={balanceLoading}>
+              <button
+                className="btn-outline text-sm"
+                onClick={refreshBalance}
+                disabled={balanceLoading}
+              >
                 {balanceLoading ? "Checking…" : "Recheck balance"}
               </button>
             </div>
@@ -289,55 +426,154 @@ export function DexWizard() {
         </StepCard>
 
         <StepCard n={4} title={STEPS[3]} active={step === 4} done={allDone} locked={step < 4}>
-          {prepError && <ErrorLine msg={prepError} />}
-          {pool && (
-            <div className="rounded-lg border border-border bg-[var(--muted)]/40 p-4">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                You're deploying
+          {!allDone && !deploying && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Choose your DEX name and token symbol. This is permanent and on-chain.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-medium text-muted-foreground">DEX Name</span>
+                  <input
+                    className="input-field mt-1"
+                    placeholder="MyAwesomeDEX"
+                    value={dexName}
+                    onChange={(e) => setDexName(e.target.value)}
+                    maxLength={40}
+                  />
+                  {dexName.length > 0 && !nameValid && (
+                    <span className="mt-1 block text-xs text-[var(--destructive)]">
+                      1–32 characters required.
+                    </span>
+                  )}
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-muted-foreground">DEX Symbol</span>
+                  <input
+                    className="input-field mt-1 font-mono"
+                    placeholder="MAD"
+                    value={dexSymbol}
+                    onChange={(e) => setDexSymbol(e.target.value)}
+                    maxLength={12}
+                  />
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    2–10 chars, alphanumeric. Usually uppercase, e.g. MAD.
+                  </span>
+                  {symbolTrim.length > 0 && !symbolValid && (
+                    <span className="mt-1 block text-xs text-[var(--destructive)]">
+                      Only letters and digits, 2–10 chars.
+                    </span>
+                  )}
+                </label>
               </div>
-              <div className="mt-1 text-xl font-semibold">
-                {pool.name}{" "}
-                <span className="text-muted-foreground font-mono text-base">({pool.symbol})</span>
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Name is assigned per session so no two deployments share branding.
-              </div>
-            </div>
-          )}
 
-          <p className="mt-4 text-sm text-muted-foreground">
-            3 signatures — WETH, Factory, Router. Each one you approve individually.
-          </p>
+              {formValid && (
+                <div className="rounded-lg border border-border bg-[var(--muted)] p-3 text-sm">
+                  Deploying:{" "}
+                  <span className="font-semibold">{dexName.trim()}</span>{" "}
+                  <span className="font-mono text-muted-foreground">({symbolTrim})</span>
+                </div>
+              )}
 
-          <div className="mt-4 space-y-2">
-            {deploySteps.map((s, i) => (
-              <DeployRow key={s.key} index={i + 1} step={s} />
-            ))}
-          </div>
+              {prepError && <ErrorLine msg={prepError} />}
 
-          {!allDone && (
-            <div className="mt-5 flex flex-wrap gap-2">
               <button
                 className="btn-primary"
-                onClick={runDeploy}
-                disabled={!deployInfo || deploying}
+                onClick={startDeploy}
+                disabled={!formValid || preparing}
               >
-                {deploying
-                  ? "Deploying…"
-                  : deploySteps.some((s) => s.status === "error")
-                    ? "Retry deployment"
-                    : "Start deployment"}
+                {preparing ? "Preparing…" : "Deploy"}
               </button>
+              <p className="text-xs text-muted-foreground">
+                3 signatures — WETH, Factory, Router. Each approved individually in your wallet.
+              </p>
             </div>
           )}
 
-          {allDone && <SuccessSummary steps={deploySteps} />}
+          {(deploying || deploySteps.some((s) => s.status !== "idle")) && (
+            <>
+              <div className="mt-2 space-y-2">
+                {deploySteps.map((s, i) => (
+                  <DeployRow key={s.key} index={i + 1} step={s} />
+                ))}
+              </div>
+
+              {!allDone && !deploying && deploySteps.some((s) => s.status === "error") && (
+                <div className="mt-5">
+                  <button
+                    className="btn-primary"
+                    onClick={() => deployInfo && runDeploy(deployInfo)}
+                  >
+                    Retry deployment
+                  </button>
+                </div>
+              )}
+
+              {allDone && (
+                <SuccessSummary
+                  name={deployInfo?.dexName ?? dexName.trim()}
+                  symbol={deployInfo?.dexSymbol ?? symbolTrim}
+                  steps={deploySteps}
+                />
+              )}
+            </>
+          )}
         </StepCard>
       </div>
 
-      <footer className="mt-10 text-center text-xs text-muted-foreground">
-        Stateless. No accounts. No keys. Your wallet signs everything.
+      <footer className="mt-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
+        <button className="btn-outline text-xs" onClick={() => setDonateOpen(true)}>
+          ♥ Support this project
+        </button>
+        <span>Stateless deploys. No accounts. No keys. Your wallet signs everything.</span>
       </footer>
+
+      {historyOpen && (
+        <HistoryPanel
+          address={address}
+          history={history}
+          loading={historyLoading}
+          onClose={() => setHistoryOpen(false)}
+          onRefresh={() => address && refreshHistory(address)}
+        />
+      )}
+      {donateOpen && (
+        <DonateModal address={address} onClose={() => setDonateOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function TopBar({
+  address,
+  onOpenHistory,
+  onOpenDonate,
+  onDisconnect,
+}: {
+  address: string | null;
+  onOpenHistory: () => void;
+  onOpenDonate: () => void;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-end gap-2">
+      {address && (
+        <>
+          <button className="btn-outline text-xs" onClick={onOpenHistory}>
+            My Deployments
+          </button>
+          <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-mono">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+            {truncate(address)}
+          </span>
+          <button className="btn-outline text-xs" onClick={onDisconnect}>
+            Disconnect
+          </button>
+        </>
+      )}
+      <button className="btn-outline text-xs" onClick={onOpenDonate}>
+        ♥ Donate
+      </button>
     </div>
   );
 }
@@ -345,14 +581,10 @@ export function DexWizard() {
 function Header() {
   return (
     <div className="mb-8 text-center">
-      <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--card)]/60 px-3 py-1 text-xs uppercase tracking-wider text-muted-foreground">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-        GIWA Testnet · chain 91342
-      </div>
-      <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">GIWA DEX Deployer</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Ship your own DEX — WETH, Factory, Router — from your wallet, in 4 steps.
-      </p>
+      <h1 className="text-5xl font-extrabold tracking-tight text-[var(--primary)] sm:text-6xl">
+        GIWA
+      </h1>
+      <p className="mt-1 text-2xl italic text-foreground sm:text-3xl">DEX Deployer</p>
     </div>
   );
 }
@@ -371,16 +603,14 @@ function ProgressBar({ current }: { current: number }) {
                 done
                   ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
                   : active
-                    ? "bg-[var(--card)] border border-[var(--primary)] text-foreground"
+                    ? "bg-white border border-[var(--primary)] text-[var(--primary)]"
                     : "bg-[var(--muted)] text-muted-foreground"
               }`}
             >
               {done ? "✓" : n}
             </div>
             {i < STEPS.length - 1 && (
-              <div
-                className={`h-px flex-1 ${done ? "bg-[var(--primary)]" : "bg-border"}`}
-              />
+              <div className={`h-px flex-1 ${done ? "bg-[var(--primary)]" : "bg-border"}`} />
             )}
           </div>
         );
@@ -415,9 +645,7 @@ function StepCard({
           <span className="text-muted-foreground mr-2">{n}.</span>
           {title}
         </h2>
-        {done && (
-          <span className="text-xs font-medium text-[var(--success)]">Complete</span>
-        )}
+        {done && <span className="text-xs font-medium text-[var(--success)]">Complete</span>}
       </div>
       {children}
     </section>
@@ -442,7 +670,7 @@ function DeployRow({ index, step }: { index: number; step: DeployStep }) {
     error: "bg-[var(--destructive)]",
   };
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-[var(--muted)]/30 p-3">
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-[var(--muted)] p-3">
       <div className="flex items-start gap-3">
         <span className={`mt-1.5 inline-block h-2.5 w-2.5 rounded-full ${dot[step.status]}`} />
         <div>
@@ -468,22 +696,82 @@ function DeployRow({ index, step }: { index: number; step: DeployStep }) {
   );
 }
 
-function SuccessSummary({ steps }: { steps: DeployStep[] }) {
+function ContractRows({
+  rows,
+}: {
+  rows: { label: string; address: string }[];
+}) {
+  return (
+    <div className="divide-y divide-border rounded-lg border border-border bg-white">
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <span className="inline-flex min-w-16 justify-center rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--primary)]">
+            {r.label}
+          </span>
+          <span className="flex-1 truncate font-mono text-xs text-foreground" title={r.address}>
+            {truncate(r.address)}
+          </span>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              className="rounded p-1.5 text-muted-foreground hover:bg-[var(--muted)] hover:text-foreground"
+              title="Copy address"
+              onClick={async () => {
+                await navigator.clipboard.writeText(r.address);
+                toast.success(`${r.label} address copied`);
+              }}
+            >
+              📋
+            </button>
+            <a
+              className="rounded p-1.5 text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--primary)]"
+              href={`${EXPLORER}/address/${r.address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open in explorer"
+            >
+              ↗
+            </a>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SuccessSummary({
+  name,
+  symbol,
+  steps,
+}: {
+  name: string;
+  symbol: string;
+  steps: DeployStep[];
+}) {
   const [weth, factory, router] = steps;
   const summary = useMemo(
     () =>
-      `WETH:    ${weth.address}\nFactory: ${factory.address}\nRouter:  ${router.address}\nExplorer: ${EXPLORER}/address/${router.address}`,
-    [weth.address, factory.address, router.address],
+      `${name} (${symbol}) — GIWA Testnet\nWETH:    ${weth.address}\nFactory: ${factory.address}\nRouter:  ${router.address}\nExplorer: ${EXPLORER}/address/${router.address}`,
+    [name, symbol, weth.address, factory.address, router.address],
   );
   const [copied, setCopied] = useState(false);
   return (
-    <div className="mt-5 rounded-lg border border-[var(--primary)]/40 bg-[var(--primary)]/5 p-4">
+    <div className="mt-5 rounded-lg border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4">
       <div className="text-sm font-semibold text-[var(--primary)]">
         🎉 Your DEX is live on GIWA testnet
       </div>
-      <pre className="mt-3 overflow-x-auto rounded-md bg-black/40 p-3 font-mono text-xs leading-6">
-        {summary}
-      </pre>
+      <div className="mt-1 text-sm text-foreground">
+        <span className="font-semibold">{name}</span>{" "}
+        <span className="font-mono text-muted-foreground">({symbol})</span>
+      </div>
+      <div className="mt-3">
+        <ContractRows
+          rows={[
+            { label: "WETH", address: weth.address! },
+            { label: "Factory", address: factory.address! },
+            { label: "Router", address: router.address! },
+          ]}
+        />
+      </div>
       <button
         className="btn-outline mt-3 text-xs"
         onClick={async () => {
@@ -492,30 +780,210 @@ function SuccessSummary({ steps }: { steps: DeployStep[] }) {
           setTimeout(() => setCopied(false), 1500);
         }}
       >
-        {copied ? "Copied ✓" : "Copy summary"}
+        {copied ? "Copied ✓" : "Copy full summary"}
       </button>
     </div>
   );
 }
 
-function ErrorLine({ msg }: { msg: string }) {
+function HistoryPanel({
+  address,
+  history,
+  loading,
+  onClose,
+  onRefresh,
+}: {
+  address: string | null;
+  history: DeploymentRecord[] | null;
+  loading: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
   return (
-    <p className="mt-2 text-xs text-[var(--destructive)]">
-      {msg}
-    </p>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 sm:p-8">
+      <div className="card-panel w-full max-w-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <div>
+            <h3 className="text-base font-semibold">My Deployments</h3>
+            {address && (
+              <p className="text-xs text-muted-foreground font-mono">{truncate(address)}</p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-outline text-xs" onClick={onRefresh} disabled={loading}>
+              {loading ? "…" : "Refresh"}
+            </button>
+            <button className="btn-outline text-xs" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
+          {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!loading && (!history || history.length === 0) && (
+            <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              You haven't deployed a DEX yet — head to Step 4 to ship one.
+            </div>
+          )}
+          {history?.map((d) => (
+            <div key={d.id} className="rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">
+                    {d.dexName}{" "}
+                    <span className="font-mono text-xs text-muted-foreground">({d.dexSymbol})</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(d.createdAt * 1000).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2">
+                <ContractRows
+                  rows={[
+                    { label: "WETH", address: d.wethAddress },
+                    { label: "Factory", address: d.factoryAddress },
+                    { label: "Router", address: d.routerAddress },
+                  ]}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
+}
+
+const PRESET_AMOUNTS = [5, 10, 25, 50];
+
+function DonateModal({
+  address,
+  onClose,
+}: {
+  address: string | null;
+  onClose: () => void;
+}) {
+  const [amount, setAmount] = useState<number>(10);
+  const [custom, setCustom] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const effective = custom ? Number(custom) : amount;
+  const valid = Number.isFinite(effective) && effective > 0;
+
+  async function donate() {
+    setError(null);
+    if (!valid) {
+      setError("Enter a valid amount.");
+      return;
+    }
+    setSending(true);
+    try {
+      if (!address) {
+        await connectWallet();
+      }
+      await ensureBaseNetwork();
+      const provider = await getProvider();
+      const signer = await provider.getSigner();
+      const usdc = new Contract(BASE_USDC, ERC20_TRANSFER_ABI, signer);
+      const amountUnits = parseUnits(effective.toString(), BASE_USDC_DECIMALS);
+
+      const bal: bigint = await usdc.balanceOf(await signer.getAddress());
+      if (bal < amountUnits) {
+        throw new Error("Insufficient USDC balance on Base.");
+      }
+
+      const tx = await usdc.transfer(DONATION_ADDRESS, amountUnits);
+      toast.message("Sending donation…", { description: "Waiting for confirmation." });
+      await tx.wait();
+      toast.success("🎉 Thanks for your support!");
+      onClose();
+    } catch (e: any) {
+      setError(decodeWalletError(e));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="card-panel w-full max-w-md p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold">Support this project</h3>
+          <button className="btn-outline text-xs" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Donations help keep this tool running. Sent via USDC on Base.
+        </p>
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {PRESET_AMOUNTS.map((a) => (
+            <button
+              key={a}
+              onClick={() => {
+                setAmount(a);
+                setCustom("");
+              }}
+              className={`rounded-md border px-2 py-2 text-sm font-medium transition ${
+                !custom && amount === a
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                  : "border-border bg-white text-foreground hover:bg-[var(--muted)]"
+              }`}
+            >
+              ${a}
+            </button>
+          ))}
+        </div>
+        <label className="mt-3 block">
+          <span className="text-xs font-medium text-muted-foreground">Custom (USDC)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className="input-field mt-1"
+            placeholder="e.g. 3.50"
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+          />
+        </label>
+        <div className="mt-3 rounded-md border border-border bg-[var(--muted)] p-2 text-xs">
+          To:{" "}
+          <span className="font-mono">{truncate(DONATION_ADDRESS)}</span> · Base mainnet · USDC
+        </div>
+        {error && <ErrorLine msg={error} />}
+        <button className="btn-primary mt-4 w-full" onClick={donate} disabled={sending || !valid}>
+          {sending ? "Sending…" : `Donate $${valid ? effective : 0}`}
+        </button>
+        <p className="mt-2 text-center text-[10px] text-muted-foreground">
+          Signed entirely by your wallet. Chain: Base ({BASE_CHAIN.chainIdHex}).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ErrorLine({ msg }: { msg: string }) {
+  return <p className="mt-2 text-xs text-[var(--destructive)]">{msg}</p>;
 }
 
 function decodeWalletError(e: any): string {
   if (!e) return "Unknown error";
   if (e.code === 4001 || /user rejected|user denied/i.test(e?.message ?? "")) {
-    return "You rejected the signature in your wallet.";
+    return "You rejected the request in your wallet.";
   }
   if (/insufficient funds/i.test(e?.message ?? "")) {
-    return "Insufficient GIWA testnet ETH for gas. Bridge more and retry.";
+    return "Insufficient funds for gas.";
+  }
+  if (/insufficient usdc|insufficient balance/i.test(e?.message ?? "")) {
+    return "Insufficient USDC balance on Base.";
   }
   if (/network|timeout|failed to fetch/i.test(e?.message ?? "")) {
-    return "Network / RPC timeout. Check your connection and retry.";
+    return "Network / RPC error. Check your connection and retry.";
   }
-  return e?.shortMessage ?? e?.message ?? "Deployment failed";
+  return e?.shortMessage ?? e?.message ?? "Something went wrong";
 }
+
+// keep unused import warning away
+void getEthereum;
