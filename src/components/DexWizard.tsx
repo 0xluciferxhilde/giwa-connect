@@ -500,7 +500,7 @@ export function DexWizard() {
                 {preparing ? "Preparing…" : "Deploy"}
               </button>
               <p className="text-xs text-muted-foreground">
-                3 signatures — WETH, Factory, Router. Each approved individually in your wallet.
+                3 signatures: WETH, Factory, Router. Each approved individually in your wallet.
               </p>
             </div>
           )}
