@@ -415,7 +415,7 @@ export function DexWizard() {
                   GIWA balance
                 </div>
                 <div className="mt-1 font-mono text-lg">
-                  {balance ? `${balance.balanceEth} ETH` : balanceLoading ? "…" : "—"}
+                  {balance ? `${balance.balanceEth} ETH` : balanceLoading ? "…" : "–"}
                 </div>
               </div>
               <button
