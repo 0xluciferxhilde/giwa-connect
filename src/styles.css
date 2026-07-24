@@ -33,23 +33,23 @@
 :root {
   --radius: 0.75rem;
 
-  /* Clean white + navy theme */
-  --background: #ffffff;
-  --foreground: #0b1220;
-  --card: #ffffff;
-  --card-foreground: #0b1220;
-  --muted: #f3f5f9;
-  --muted-foreground: #4b5563;
-  --primary: #1e3a8a;                 /* navy */
+  /* Dark DeFi theme with violet accent */
+  --background: #0b0b14;
+  --foreground: #f5f5fa;
+  --card: #14141f;
+  --card-foreground: #f5f5fa;
+  --muted: #1c1c2b;
+  --muted-foreground: #9598ad;
+  --primary: #8b5cf6;                 /* violet */
   --primary-foreground: #ffffff;
-  --accent: #2749a8;
-  --accent-foreground: #ffffff;
-  --border: #e5e7eb;
-  --input: #f3f5f9;
-  --ring: #1e3a8a;
-  --success: #15803d;
-  --warning: #b45309;
-  --destructive: #b91c1c;
+  --accent: #a78bfa;
+  --accent-foreground: #0b0b14;
+  --border: #262638;
+  --input: #1c1c2b;
+  --ring: #8b5cf6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 }
 
@@ -65,7 +65,10 @@
   }
 
   body {
-    background-color: #fafafa;
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(139,92,246,0.12), transparent 60%),
+                radial-gradient(900px 500px at 90% 0%, rgba(167,139,250,0.08), transparent 60%),
+                #0b0b14;
+    background-attachment: fixed;
   }
 }
 
