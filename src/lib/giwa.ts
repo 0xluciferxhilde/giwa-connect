@@ -3,78 +3,53 @@ export const API_BASE = "https://giwa-api.test-hub.xyz";
 export const GIWA_CHAIN = {
   chainId: 91342,
   chainIdHex: "0x164ce",
-  chainName: "GIWA Testnet",
+  chainName: "GIWA Sepolia Testnet",
   rpcUrls: ["https://sepolia-rpc.giwa.io"],
   blockExplorerUrls: ["https://sepolia-explorer.giwa.io"],
   nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
 };
 
-export const BASE_CHAIN = {
-  chainId: 8453,
-  chainIdHex: "0x2105",
-  chainName: "Base",
-  rpcUrls: ["https://mainnet.base.org"],
-  blockExplorerUrls: ["https://basescan.org"],
-  nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
-};
+export const EXPLORER = "https://sepolia-explorer.giwa.io";
+export const txUrl = (h: string) => `${EXPLORER}/tx/${h}`;
 
-// Official Base mainnet USDC
-export const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-export const BASE_USDC_DECIMALS = 6;
-
-export const DONATION_ADDRESS = "0x3bc6348e1e569e97bd8247b093475a4ac22b9fd4";
-
-export type FaucetsResp = {
-  sepoliaFaucets: { name: string; url: string }[];
-  giwaFaucet: { name: string; url: string };
-  giwaBridge: { name: string; url: string };
-};
-
-export type BalanceResp = {
+export type TokenInfo = {
   address: string;
-  balanceWei: string;
-  balanceEth: number;
-  hasFunds: boolean;
+  symbol: string;
+  name?: string;
+  decimals: number;
 };
 
-export type PoolNameResp = { name: string; symbol: string };
-
-export type DeployInfoResp = {
-  network: {
-    chainId: number;
-    chainIdHex: string;
-    rpcUrl: string;
-    explorerUrl: string;
-    currencySymbol: string;
-  };
-  dexName: string;
-  dexSymbol: string;
-  weth: { abi: any[]; bytecode: string };
-  factory: { abi: any[]; bytecode: string };
-  router: { abi: any[]; bytecode: string };
+export type TokensResp = {
+  tokens: TokenInfo[];
+  router: string;
+  factory: string;
+  checkIn: string;
+  gdexToken: string;
 };
 
-export type DeploymentRecord = {
-  id: number;
-  deployerAddress: string;
-  dexName: string;
-  dexSymbol: string;
-  wethAddress: string;
-  factoryAddress: string;
-  routerAddress: string;
-  wethTxHash?: string;
-  factoryTxHash?: string;
-  routerTxHash?: string;
-  chainId: number;
-  createdAt: number;
-  explorerLinks: { weth: string; factory: string; router: string };
-};
-
-export type DeploymentsListResp = {
+export type PoolInfo = {
   address: string;
-  count: number;
-  deployments: DeploymentRecord[];
+  token0: string;
+  token1: string;
+  token0Symbol: string;
+  token1Symbol: string;
+  reserve0: string;
+  reserve1: string;
+  totalSupply: string;
+  exists: boolean;
 };
+
+export type PoolsResp = { pools: PoolInfo[] };
+
+export type UserPoolInfo = PoolInfo & {
+  hasPosition: boolean;
+  userLpBalance: string;
+  userSharePct: number;
+  userTokenAAmount: string;
+  userTokenBAmount: string;
+};
+
+export type UserPoolsResp = { pools: UserPoolInfo[] };
 
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`);
@@ -82,36 +57,26 @@ async function get<T>(path: string): Promise<T> {
   return r.json();
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`API ${path} failed: ${r.status}`);
-  return r.json();
-}
-
 export const api = {
-  faucets: () => get<FaucetsResp>("/api/faucets"),
-  balance: (a: string) => get<BalanceResp>(`/api/balance/${a}`),
-  poolName: () => get<PoolNameResp>("/api/pool-name"),
-  deployInfo: (name: string, symbol: string) =>
-    get<DeployInfoResp>(
-      `/api/deploy-info?dex_name=${encodeURIComponent(name)}&dex_symbol=${encodeURIComponent(symbol)}`,
-    ),
-  listDeployments: (a: string) => get<DeploymentsListResp>(`/api/deployments/${a}`),
-  saveDeployment: (body: {
-    deployerAddress: string;
-    dexName: string;
-    dexSymbol: string;
-    wethAddress: string;
-    factoryAddress: string;
-    routerAddress: string;
-    wethTxHash?: string;
-    factoryTxHash?: string;
-    routerTxHash?: string;
-  }) => post<DeploymentRecord>("/api/deployments", body),
+  tokens: () => get<TokensResp>("/api/tokens"),
+  pools: () => get<PoolsResp>("/api/pools"),
+  userPools: (addr: string) => get<UserPoolsResp>(`/api/pools/${addr}`),
 };
 
-export const EXPLORER = "https://sepolia-explorer.giwa.io";
+// Fallback contract addresses (also returned by /api/tokens)
+export const CONTRACTS = {
+  WETH: "0xE13cb123bb620203791371593c992343A3EE6C7F",
+  Factory: "0x9992053d3F24B4a67542bdF74A1cA4D8422f9206",
+  Router: "0x070bd877F573Ea66E24c140876E07558b970B404",
+  GDEX: "0x02b8b8090dFFb61dE134A9e639577E9c153Ac871",
+  USDT: "0x2bb801d90A99b5619D5361ED7a75398FB3b0Cb22",
+  USDC: "0xd7E5A73D66D202CD211290536eab5096E8a5114F",
+  CheckIn: "0xa1b4Db18Fe0903e407FFeD9A7f3CA8B7FfaC052D",
+} as const;
+
+export const FALLBACK_TOKENS: TokenInfo[] = [
+  { address: CONTRACTS.WETH, symbol: "GIWA", name: "GIWA (WETH)", decimals: 18 },
+  { address: CONTRACTS.GDEX, symbol: "GDEX", name: "GDEX", decimals: 18 },
+  { address: CONTRACTS.USDT, symbol: "USDT", name: "Tether USD", decimals: 6 },
+  { address: CONTRACTS.USDC, symbol: "USDC", name: "USD Coin", decimals: 6 },
+];
