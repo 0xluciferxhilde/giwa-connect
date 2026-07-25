@@ -1,5 +1,5 @@
 import { BrowserProvider, type Eip1193Provider } from "ethers";
-import { GIWA_CHAIN } from "./giwa";
+import { GIWA_CHAIN, BASE_CHAIN } from "./giwa";
 
 declare global {
   interface Window {
@@ -55,6 +55,7 @@ export async function ensureChain(chain: ChainDef): Promise<void> {
 }
 
 export const ensureGiwaNetwork = () => ensureChain(GIWA_CHAIN);
+export const ensureBaseNetwork = () => ensureChain(BASE_CHAIN);
 
 export async function getCurrentChainIdHex(): Promise<string | null> {
   try {
