@@ -320,7 +320,7 @@ export function DexWizard() {
       <div className="mt-8 space-y-6">
         <StepCard n={1} title={STEPS[0]} active={step === 1} done={step > 1}>
           <p className="text-sm text-muted-foreground">
-            MetaMask popup — you approve, we only ever see your public address. We never ask for
+            MetaMask popup. You approve, and we only ever see your public address. We never ask for
             private keys or seed phrases.
           </p>
           {address ? (
@@ -415,7 +415,7 @@ export function DexWizard() {
                   GIWA balance
                 </div>
                 <div className="mt-1 font-mono text-lg">
-                  {balance ? `${balance.balanceEth} ETH` : balanceLoading ? "…" : "—"}
+                  {balance ? `${balance.balanceEth} ETH` : balanceLoading ? "…" : "–"}
                 </div>
               </div>
               <button
@@ -500,7 +500,7 @@ export function DexWizard() {
                 {preparing ? "Preparing…" : "Deploy"}
               </button>
               <p className="text-xs text-muted-foreground">
-                3 signatures — WETH, Factory, Router. Each approved individually in your wallet.
+                3 signatures: WETH, Factory, Router. Each approved individually in your wallet.
               </p>
             </div>
           )}
@@ -541,6 +541,32 @@ export function DexWizard() {
           ♥ Support this project
         </button>
         <span>Stateless deploys. No accounts. No keys. Your wallet signs everything.</span>
+        <div className="mt-3 flex flex-col items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            My Other Projects
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {[
+              "https://test-hub.xyz/",
+              "https://litdex.test-hub.xyz/",
+              "https://zkbet.test-hub.xyz/",
+              "https://quipstats.test-hub.xyz/",
+            ].map((href) => {
+              const label = href.replace(/^https?:\/\//, "").replace(/\/$/, "");
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full border border-border bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--primary)]/80 transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]"
+                >
+                  {label}
+                </a>
+              );
+            })}
+          </div>
+        </div>
       </footer>
 
       {historyOpen && (
@@ -598,7 +624,7 @@ function Header() {
       <img
         src="/giwa-logo.png"
         alt="GIWA logo"
-        className="mb-3 h-16 w-16 rounded-lg object-cover shadow-sm"
+        className="mb-3 h-16 w-16 object-contain"
       />
       <h1 className="text-5xl font-extrabold tracking-tight text-[var(--primary)] sm:text-6xl">
         GIWA
@@ -769,7 +795,7 @@ function SuccessSummary({
   const [weth, factory, router] = steps;
   const summary = useMemo(
     () =>
-      `${name} (${symbol}) — GIWA Testnet\nWETH:    ${weth.address}\nFactory: ${factory.address}\nRouter:  ${router.address}\nExplorer: ${EXPLORER}/address/${router.address}`,
+      `${name} (${symbol}) on GIWA Testnet\nWETH:    ${weth.address}\nFactory: ${factory.address}\nRouter:  ${router.address}\nExplorer: ${EXPLORER}/address/${router.address}`,
     [name, symbol, weth.address, factory.address, router.address],
   );
   const [copied, setCopied] = useState(false);
@@ -841,7 +867,7 @@ function HistoryPanel({
           {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
           {!loading && (!history || history.length === 0) && (
             <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              You haven't deployed a DEX yet — head to Step 4 to ship one.
+              You haven't deployed a DEX yet. Head to Step 4 to ship one.
             </div>
           )}
           {history?.map((d) => (

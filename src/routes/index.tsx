@@ -4,7 +4,7 @@ import { DexWizard } from "@/components/DexWizard";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "GIWA DEX Deployer — Ship your own DEX on GIWA testnet" },
+      { title: "GIWA DEX Deployer: Ship your own DEX on GIWA testnet" },
       {
         name: "description",
         content:
