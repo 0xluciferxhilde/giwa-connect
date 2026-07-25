@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { WalletProvider } from "../lib/wallet-context";
 
 function NotFoundComponent() {
   return (
@@ -126,8 +127,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster richColors position="top-center" />
+      <WalletProvider>
+        <Outlet />
+        <Toaster richColors position="top-center" />
+      </WalletProvider>
     </QueryClientProvider>
   );
 }
