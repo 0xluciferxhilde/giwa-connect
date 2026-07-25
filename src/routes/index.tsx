@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DexWizard } from "@/components/DexWizard";
+import { Navbar } from "@/components/Navbar";
+import { CheckInPill } from "@/components/CheckInPill";
+import { useEffect, useState } from "react";
+import { dexApi, type TokensResp } from "@/lib/dex";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,5 +28,20 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  return <DexWizard />;
+  const [tokens, setTokens] = useState<TokensResp | null>(null);
+  useEffect(() => {
+    let alive = true;
+    dexApi.tokens().then((t) => alive && setTokens(t)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return (
+    <div>
+      <div className="mx-auto w-full max-w-5xl px-4 pt-6">
+        <Navbar active="deployer" rightExtras={<CheckInPill checkInAddress={tokens?.checkIn} />} />
+      </div>
+      <DexWizard />
+    </div>
+  );
 }
