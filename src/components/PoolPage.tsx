@@ -483,21 +483,25 @@ function SideRow({
           className="w-full bg-transparent text-2xl font-semibold outline-none"
         />
         {locked ? (
-          <span className="rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+            <TokenIcon symbol={selected?.symbol} size={20} />
             {selected?.symbol}
           </span>
         ) : (
-          <select
-            value={selectedIdx}
-            onChange={(e) => onSelect(Number(e.target.value))}
-            className="rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold"
-          >
-            {tokens.map((tk, i) => (
-              <option key={tk.symbol} value={i}>
-                {tk.symbol}
-              </option>
-            ))}
-          </select>
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+            <TokenIcon symbol={selected?.symbol} size={20} />
+            <select
+              value={selectedIdx}
+              onChange={(e) => onSelect(Number(e.target.value))}
+              className="bg-transparent outline-none"
+            >
+              {tokens.map((tk, i) => (
+                <option key={tk.symbol} value={i}>
+                  {tk.symbol}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
     </div>
