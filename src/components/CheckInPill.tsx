@@ -10,7 +10,6 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
   const [canCheckIn, setCanCheckIn] = useState<boolean | null>(null);
   const [streak, setStreak] = useState<bigint>(0n);
   const [reward, setReward] = useState<bigint>(0n);
-  const [nextResetMs, setNextResetMs] = useState<number | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
   const [pending, setPending] = useState(false);
 
@@ -28,23 +27,12 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
         c.canCheckIn(address),
         c.streaks(address),
         c.getReward(address),
-        c.lastCheckIn(address),
       ]);
       if (results[0].status === "fulfilled") setCanCheckIn(Boolean(results[0].value));
       if (results[1].status === "fulfilled") setStreak(BigInt(results[1].value));
       if (results[2].status === "fulfilled") setReward(BigInt(results[2].value));
-      if (results[3].status === "fulfilled") {
-        const last = Number(results[3].value) * 1000;
-        // Next UTC midnight after `last`
-        const d = new Date(last);
-        const next = Date.UTC(
-          d.getUTCFullYear(),
-          d.getUTCMonth(),
-          d.getUTCDate() + 1,
-        );
-        setNextResetMs(next);
-      }
-    } catch {
+    } catch (e) {
+      console.error("check-in refresh failed", e);
       setCanCheckIn(null);
     }
   }, [address, checkInAddress]);
@@ -110,7 +98,14 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
     );
   }
 
-  const remaining = nextResetMs ? Math.max(0, nextResetMs - now) : 0;
+  // Next UTC midnight from current time (00:00 UTC = 05:30 IST)
+  const d = new Date(now);
+  const nextResetMs = Date.UTC(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate() + 1,
+  );
+  const remaining = Math.max(0, nextResetMs - now);
   const hh = Math.floor(remaining / 3_600_000)
     .toString()
     .padStart(2, "0");

@@ -52,7 +52,10 @@ export function PoolPage() {
         setTokens(t);
         setUiTokens(buildUiTokens(t));
       })
-      .catch(() => toast.error("Failed to load tokens"));
+      .catch((e) => {
+        console.error("Failed to load tokens", e);
+        toast.error(`Failed to load tokens: ${e?.message ?? e}`);
+      });
   }, []);
 
   const refreshPools = useCallback(async () => {

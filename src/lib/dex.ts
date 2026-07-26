@@ -43,7 +43,28 @@ async function jget<T>(path: string): Promise<T> {
 }
 
 export const dexApi = {
-  tokens: () => jget<TokensResp>("/api/tokens"),
+  tokens: async (): Promise<TokensResp> => {
+    const raw = await jget<any>("/api/tokens");
+    const t = raw?.tokens;
+    const tokens: TokenMeta[] = Array.isArray(t)
+      ? t
+      : t && typeof t === "object"
+        ? Object.entries(t).map(([symbol, info]: [string, any]) => ({
+            symbol,
+            address: info.address,
+            name: info.name,
+            decimals: Number(info.decimals),
+          }))
+        : [];
+    return {
+      tokens,
+      router: raw.router,
+      factory: raw.factory,
+      weth: raw.weth ?? tokens.find((x) => x.symbol.toUpperCase() === "WETH")?.address ?? "",
+      checkIn: raw.checkIn,
+      gdexToken: raw.gdexToken,
+    };
+  },
   pools: () => jget<PoolsResp>("/api/pools"),
   poolsFor: (a: string) => jget<PoolsResp>(`/api/pools/${a}`),
 };
