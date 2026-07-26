@@ -16,6 +16,8 @@ import {
 } from "@/lib/dex";
 import { ensureGiwaNetwork, getProvider } from "@/lib/wallet";
 import { useWallet } from "@/lib/wallet-context";
+import { TokenIcon } from "./TokenIcon";
+import { SuccessDialog } from "./SuccessDialog";
 
 type UiToken = {
   address: string;
@@ -113,7 +115,7 @@ export function PoolPage() {
               .filter((p) => p.hasPosition)
               .map((p) => (
                 <PositionCard
-                  key={p.address}
+                  key={p.pairAddress}
                   pool={p}
                   tokens={tokens}
                   uiTokens={uiTokens}
