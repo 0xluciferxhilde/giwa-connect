@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Contract, MaxUint256, formatUnits, parseUnits } from "ethers";
-import { Navbar } from "./Navbar";
 import { CheckInPill } from "./CheckInPill";
 import {
   ERC20_ABI,
@@ -43,7 +42,6 @@ const NATIVE_GAS_BUFFER = parseUnits("0.0005", 18);
 export function SwapPage() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
-      <Navbar active="swap" rightExtras={<CheckInPillMount />} />
       <div className="mb-6 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-[var(--primary)] sm:text-4xl">
           Swap

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Contract, MaxUint256, formatUnits, parseUnits } from "ethers";
-import { Navbar } from "./Navbar";
 import { CheckInPill } from "./CheckInPill";
 import {
   ERC20_ABI,
@@ -75,7 +74,6 @@ export function PoolPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">
-      <Navbar active="pool" rightExtras={<CheckInPill checkInAddress={tokens?.checkIn} />} />
       <div className="mb-6 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-[var(--primary)] sm:text-4xl">
           Liquidity Pools
