@@ -16,6 +16,8 @@ import {
 } from "@/lib/dex";
 import { ensureGiwaNetwork, getProvider } from "@/lib/wallet";
 import { useWallet } from "@/lib/wallet-context";
+import { TokenIcon } from "./TokenIcon";
+import { SuccessDialog } from "./SuccessDialog";
 
 type UiToken = {
   address: string;
@@ -113,7 +115,7 @@ export function PoolPage() {
               .filter((p) => p.hasPosition)
               .map((p) => (
                 <PositionCard
-                  key={p.address}
+                  key={p.pairAddress}
                   pool={p}
                   tokens={tokens}
                   uiTokens={uiTokens}
@@ -157,6 +159,8 @@ function AddLiquidityCard({
   const [allowB, setAllowB] = useState<bigint>(0n);
   const [slippage] = useState(DEFAULT_SLIPPAGE);
   const [pending, setPending] = useState<string | null>(null);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successData, setSuccessData] = useState<{ title: string; description?: string; hash?: string }>({ title: "" });
 
   const a = lockedPair?.a ?? uiTokens[aIdx];
   const b = lockedPair?.b ?? uiTokens[bIdx];
@@ -315,11 +319,12 @@ function AddLiquidityCard({
       }
       toast.message("Adding liquidity…", { description: "Waiting for confirmation." });
       const rc = await tx.wait();
-      toast.success("Liquidity added ✓", {
-        action: rc?.hash
-          ? { label: "View", onClick: () => window.open(explorerTx(rc.hash), "_blank") }
-          : undefined,
+      setSuccessData({
+        title: "Liquidity added",
+        description: `${a.symbol} + ${b.symbol} added to the pool.`,
+        hash: rc?.hash,
       });
+      setSuccessOpen(true);
       setAmountA("");
       setAmountB("");
       onComplete();
@@ -334,6 +339,14 @@ function AddLiquidityCard({
 
   return (
     <div className="card-panel p-5">
+      <SuccessDialog
+        open={successOpen}
+        onClose={() => setSuccessOpen(false)}
+        title={successData.title}
+        description={successData.description}
+        txHash={successData.hash}
+        explorerUrl={successData.hash ? explorerTx(successData.hash) : undefined}
+      />
       <div className="mb-3 text-sm font-semibold">Add liquidity</div>
       <SideRow
         label="Token A"
@@ -470,21 +483,25 @@ function SideRow({
           className="w-full bg-transparent text-2xl font-semibold outline-none"
         />
         {locked ? (
-          <span className="rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+            <TokenIcon symbol={selected?.symbol} size={20} />
             {selected?.symbol}
           </span>
         ) : (
-          <select
-            value={selectedIdx}
-            onChange={(e) => onSelect(Number(e.target.value))}
-            className="rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold"
-          >
-            {tokens.map((tk, i) => (
-              <option key={tk.symbol} value={i}>
-                {tk.symbol}
-              </option>
-            ))}
-          </select>
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+            <TokenIcon symbol={selected?.symbol} size={20} />
+            <select
+              value={selectedIdx}
+              onChange={(e) => onSelect(Number(e.target.value))}
+              className="bg-transparent outline-none"
+            >
+              {tokens.map((tk, i) => (
+                <option key={tk.symbol} value={i}>
+                  {tk.symbol}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
     </div>
@@ -507,24 +524,31 @@ function PositionCard({
   const [pct, setPct] = useState(0);
   const [lpAllowance, setLpAllowance] = useState<bigint>(0n);
   const [pending, setPending] = useState<string | null>(null);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successHash, setSuccessHash] = useState<string | undefined>();
 
-  const tA = findUi(uiTokens, pool.token0.address) ?? {
-    address: pool.token0.address,
-    symbol: pool.token0.symbol,
-    decimals: pool.token0.decimals,
+  // Resolve tokens directly from pool row (never crash on missing lookup).
+  const tA: UiToken = findUi(uiTokens, pool.tokenAAddress) ?? {
+    address: pool.tokenAAddress,
+    symbol: pool.tokenA,
+    decimals: pool.tokenA === "USDC" || pool.tokenA === "USDT" ? 6 : 18,
     isNative: false,
   };
-  const tB = findUi(uiTokens, pool.token1.address) ?? {
-    address: pool.token1.address,
-    symbol: pool.token1.symbol,
-    decimals: pool.token1.decimals,
+  const tB: UiToken = findUi(uiTokens, pool.tokenBAddress) ?? {
+    address: pool.tokenBAddress,
+    symbol: pool.tokenB,
+    decimals: pool.tokenB === "USDC" || pool.tokenB === "USDT" ? 6 : 18,
     isNative: false,
   };
 
+  // Compute user's underlying amounts robustly from bigints
   const lpBal = BigInt(pool.userLpBalance ?? "0");
+  const lpTotal = BigInt(pool.lpTotalSupply ?? "0");
+  const resA = BigInt(pool.reserveA ?? "0");
+  const resB = BigInt(pool.reserveB ?? "0");
+  const outA = lpTotal > 0n ? (lpBal * resA) / lpTotal : 0n;
+  const outB = lpTotal > 0n ? (lpBal * resB) / lpTotal : 0n;
   const lpBurn = (lpBal * BigInt(Math.round(pct * 100))) / 10000n;
-  const outA = BigInt(pool.userToken0Amount ?? "0");
-  const outB = BigInt(pool.userToken1Amount ?? "0");
   const partOutA = (outA * BigInt(Math.round(pct * 100))) / 10000n;
   const partOutB = (outB * BigInt(Math.round(pct * 100))) / 10000n;
 
@@ -532,10 +556,10 @@ function PositionCard({
     if (!address) return;
     try {
       const provider = await getProvider();
-      const pair = new Contract(pool.address, PAIR_ABI, provider);
+      const pair = new Contract(pool.pairAddress, PAIR_ABI, provider);
       setLpAllowance(await pair.allowance(address, tokens.router));
     } catch {}
-  }, [address, pool.address, tokens.router]);
+  }, [address, pool.pairAddress, tokens.router]);
 
   useEffect(() => {
     if (tab === "remove") refreshAllow();
@@ -549,11 +573,11 @@ function PositionCard({
       await ensureGiwaNetwork();
       const provider = await getProvider();
       const signer = await provider.getSigner();
-      const pair = new Contract(pool.address, PAIR_ABI, signer);
+      const pair = new Contract(pool.pairAddress, PAIR_ABI, signer);
       const tx = await pair.approve(tokens.router, MaxUint256);
       toast.message("Approving LP token…");
       await tx.wait();
-      toast.success("LP token approved");
+      toast.message("LP token approved");
       refreshAllow();
     } catch (e: any) {
       toast.error(decodeWalletError(e));
@@ -592,11 +616,8 @@ function PositionCard({
       }
       toast.message("Removing liquidity…");
       const rc = await tx.wait();
-      toast.success("Liquidity removed ✓", {
-        action: rc?.hash
-          ? { label: "View", onClick: () => window.open(explorerTx(rc.hash), "_blank") }
-          : undefined,
-      });
+      setSuccessHash(rc?.hash);
+      setSuccessOpen(true);
       setPct(0);
       setTab(null);
       onComplete();
@@ -609,9 +630,21 @@ function PositionCard({
 
   return (
     <div className="card-panel p-4">
+      <SuccessDialog
+        open={successOpen}
+        onClose={() => setSuccessOpen(false)}
+        title="Liquidity removed"
+        description={`Received ${tA.symbol} + ${tB.symbol}.`}
+        txHash={successHash}
+        explorerUrl={successHash ? explorerTx(successHash) : undefined}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span className="flex -space-x-1.5">
+              <TokenIcon symbol={tA.symbol} size={22} className="ring-2 ring-white" />
+              <TokenIcon symbol={tB.symbol} size={22} className="ring-2 ring-white" />
+            </span>
             {tA.symbol} / {tB.symbol}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
