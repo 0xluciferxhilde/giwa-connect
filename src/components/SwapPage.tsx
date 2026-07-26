@@ -14,6 +14,8 @@ import {
 } from "@/lib/dex";
 import { ensureGiwaNetwork, getProvider } from "@/lib/wallet";
 import { useWallet } from "@/lib/wallet-context";
+import { TokenIcon } from "./TokenIcon";
+import { SuccessDialog } from "./SuccessDialog";
 
 type UiToken = {
   address: string; // for GIWA (native), this is the WETH address (used for swap path)
@@ -75,12 +77,16 @@ function SwapCard() {
   const [recvIdx, setRecvIdx] = useState(1);
   const [amountIn, setAmountIn] = useState<string>("");
   const [quoteOut, setQuoteOut] = useState<bigint | null>(null);
+  const [quotePath, setQuotePath] = useState<string[] | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE);
   const [showSettings, setShowSettings] = useState(false);
   const [balances, setBalances] = useState<Record<string, bigint>>({});
   const [allowance, setAllowance] = useState<bigint>(0n);
   const [pending, setPending] = useState<string | null>(null);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successHash, setSuccessHash] = useState<string | undefined>();
 
   const pay = uiTokens[payIdx];
   const recv = uiTokens[recvIdx];
@@ -144,20 +150,47 @@ function SwapCard() {
     if (!tokens || !pay || !recv) return;
     if (!amountIn || Number(amountIn) <= 0) {
       setQuoteOut(null);
+      setQuotePath(null);
+      setQuoteError(null);
       return;
     }
     if (quoteTimer.current) clearTimeout(quoteTimer.current);
     setQuoting(true);
+    setQuoteError(null);
     quoteTimer.current = setTimeout(async () => {
       try {
         const provider = await getProvider();
         const router = new Contract(tokens.router, ROUTER_ABI, provider);
         const amt = parseUnits(amountIn, pay.decimals);
-        const path = [pay.address, recv.address];
-        const out: bigint[] = await router.getAmountsOut(amt, path);
-        setQuoteOut(out[out.length - 1]);
+        const weth = tokens.weth;
+        const candidates: string[][] = [[pay.address, recv.address]];
+        const isWethish = (a: string) => a.toLowerCase() === weth.toLowerCase();
+        if (!isWethish(pay.address) && !isWethish(recv.address)) {
+          candidates.push([pay.address, weth, recv.address]);
+        }
+        let resolved: { path: string[]; out: bigint } | null = null;
+        for (const path of candidates) {
+          try {
+            const out: bigint[] = await router.getAmountsOut(amt, path);
+            console.log("[swap] quote path", path, out.map(String));
+            resolved = { path, out: out[out.length - 1] };
+            break;
+          } catch (err) {
+            console.warn("[swap] path failed", path, err);
+          }
+        }
+        if (!resolved) {
+          setQuoteOut(null);
+          setQuotePath(null);
+          setQuoteError("No route available for this pair.");
+        } else {
+          setQuoteOut(resolved.out);
+          setQuotePath(resolved.path);
+        }
       } catch {
         setQuoteOut(null);
+        setQuotePath(null);
+        setQuoteError("Failed to fetch quote.");
       } finally {
         setQuoting(false);
       }
@@ -259,7 +292,7 @@ function SwapCard() {
   };
 
   const doSwap = async () => {
-    if (!pay || !recv || !tokens || !address || !quoteOut || !amountIn) return;
+    if (!pay || !recv || !tokens || !address || !quoteOut || !amountIn || !quotePath) return;
     setPending("swap");
     try {
       await ensureGiwaNetwork();
@@ -269,7 +302,7 @@ function SwapCard() {
       const amt = parseUnits(amountIn, pay.decimals);
       const minOut = (quoteOut * BigInt(Math.round((100 - slippage) * 100))) / 10000n;
       const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-      const path = [pay.address, recv.address];
+      const path = quotePath;
       let tx;
       if (pay.isNative) {
         tx = await router.swapExactETHForTokens(minOut, path, address, deadline, { value: amt });
@@ -280,13 +313,11 @@ function SwapCard() {
       }
       toast.message("Swap submitted", { description: "Waiting for confirmation." });
       const rc = await tx.wait();
-      toast.success("Swap complete ✓", {
-        action: rc?.hash
-          ? { label: "View", onClick: () => window.open(explorerTx(rc.hash), "_blank") }
-          : undefined,
-      });
+      setSuccessHash(rc?.hash);
+      setSuccessOpen(true);
       setAmountIn("");
       setQuoteOut(null);
+      setQuotePath(null);
       bumpRefresh();
     } catch (e: any) {
       toast.error(decodeWalletError(e));
@@ -317,6 +348,9 @@ function SwapCard() {
       } else if (needApproval) {
         btnLabel = `Approve ${pay?.symbol}`;
         btnAction = doApprove;
+      } else if (quoteError) {
+        btnLabel = "No route available";
+        btnDisabled = true;
       } else if (!quoteOut) {
         btnLabel = "Fetching quote…";
         btnDisabled = true;
@@ -333,6 +367,16 @@ function SwapCard() {
 
   return (
     <div className="card-panel p-5">
+      <SuccessDialog
+        open={successOpen}
+        onClose={() => setSuccessOpen(false)}
+        title="Swap complete"
+        description={
+          pay && recv ? `Swapped ${pay.symbol} → ${recv.symbol}.` : undefined
+        }
+        txHash={successHash}
+        explorerUrl={successHash ? explorerTx(successHash) : undefined}
+      />
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-semibold">Swap tokens</div>
         <button
@@ -424,7 +468,7 @@ function SwapCard() {
       />
 
       <div className="mt-3 min-h-[1.25rem] text-xs text-muted-foreground">
-        {quoting ? "Fetching quote…" : priceStr}
+        {quoting ? "Fetching quote…" : quoteError ? quoteError : priceStr}
       </div>
 
       <button
