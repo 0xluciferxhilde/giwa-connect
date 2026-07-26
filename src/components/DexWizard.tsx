@@ -599,21 +599,10 @@ function TopBar({
   return (
     <div className="mb-4 flex items-center justify-end gap-2">
       {address && (
-        <>
-          <button className="btn-outline text-xs" onClick={onOpenHistory}>
-            My Deployments
-          </button>
-          <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-mono">
-            {truncate(address)}
-          </span>
-          <button className="btn-outline text-xs" onClick={onDisconnect}>
-            Disconnect
-          </button>
-        </>
+        <button className="btn-outline text-xs" onClick={onOpenHistory}>
+          My Deployments
+        </button>
       )}
-      <button className="btn-outline text-xs" onClick={onOpenDonate}>
-        ♥ Donate
-      </button>
     </div>
   );
 }
