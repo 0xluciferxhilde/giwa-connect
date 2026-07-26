@@ -19,19 +19,31 @@ export type TokensResp = {
 };
 
 export type PoolMeta = {
-  address: string;
-  token0: TokenMeta;
-  token1: TokenMeta;
-  reserve0: string;
-  reserve1: string;
-  totalSupply: string;
+  // Raw shape from /api/pools[/{addr}]
+  tokenA: string; // symbol
+  tokenB: string; // symbol
+  tokenAAddress: string;
+  tokenBAddress: string;
+  pairAddress: string;
   exists: boolean;
+  reserveA: string;
+  reserveB: string;
+  lpTotalSupply: string;
   // when queried per user:
   userLpBalance?: string;
   userSharePct?: number;
-  userToken0Amount?: string;
-  userToken1Amount?: string;
+  userTokenAAmount?: number;
+  userTokenBAmount?: number;
   hasPosition?: boolean;
+};
+
+// Token logos (raw asset URLs)
+export const TOKEN_LOGOS: Record<string, string> = {
+  GIWA: "https://raw.githubusercontent.com/0xluciferxhilde/giwa-connect/main/public/weth.jpg",
+  WETH: "https://raw.githubusercontent.com/0xluciferxhilde/giwa-connect/main/public/weth.jpg",
+  USDC: "https://raw.githubusercontent.com/0xluciferxhilde/giwa-connect/main/public/usdc.jpg",
+  USDT: "https://raw.githubusercontent.com/0xluciferxhilde/giwa-connect/main/public/usdt.jpg",
+  GDEX: "https://raw.githubusercontent.com/0xluciferxhilde/giwa-connect/main/public/gdex_logo.png",
 };
 
 export type PoolsResp = { pools: PoolMeta[] };
