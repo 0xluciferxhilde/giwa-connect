@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Contract, MaxUint256, formatUnits, parseUnits } from "ethers";
-import { CheckInPill } from "./CheckInPill";
 import {
   ERC20_ABI,
   ROUTER_ABI,
@@ -53,18 +52,6 @@ export function SwapPage() {
       <SwapCard />
     </div>
   );
-}
-
-function CheckInPillMount() {
-  const [tokens, setTokens] = useState<TokensResp | null>(null);
-  useEffect(() => {
-    let alive = true;
-    dexApi.tokens().then((t) => alive && setTokens(t)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return <CheckInPill checkInAddress={tokens?.checkIn} />;
 }
 
 function SwapCard() {

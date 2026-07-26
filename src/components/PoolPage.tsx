@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Contract, MaxUint256, formatUnits, parseUnits } from "ethers";
-import { CheckInPill } from "./CheckInPill";
 import {
   ERC20_ABI,
   PAIR_ABI,
