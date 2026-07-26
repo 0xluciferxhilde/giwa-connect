@@ -523,17 +523,20 @@ function TokenInputCard({
           onChange={(e) => onAmount(e.target.value.replace(/,/g, ""))}
           className="w-full bg-transparent text-2xl font-semibold outline-none"
         />
-        <select
-          value={selectedIdx}
-          onChange={(e) => onSelect(Number(e.target.value))}
-          className="rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold"
-        >
-          {tokens.map((tk, i) => (
-            <option key={tk.symbol} value={i}>
-              {tk.symbol}
-            </option>
-          ))}
-        </select>
+        <div className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1 text-sm font-semibold">
+          <TokenIcon symbol={t?.symbol} size={20} />
+          <select
+            value={selectedIdx}
+            onChange={(e) => onSelect(Number(e.target.value))}
+            className="bg-transparent outline-none"
+          >
+            {tokens.map((tk, i) => (
+              <option key={tk.symbol} value={i}>
+                {tk.symbol}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );
