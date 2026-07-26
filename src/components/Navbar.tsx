@@ -25,6 +25,12 @@ export function Navbar({
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <nav className="flex items-center gap-2">
         <Link
+          to="/"
+          className={`${linkBase} ${active === "deployer" ? activeLink : inactiveLink}`}
+        >
+          Deploy
+        </Link>
+        <Link
           to="/swap"
           className={`${linkBase} ${active === "swap" ? activeLink : inactiveLink}`}
         >
