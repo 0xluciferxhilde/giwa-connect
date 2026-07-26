@@ -95,7 +95,10 @@ function SwapCard() {
         setTokens(t);
         setUiTokens(buildUiTokens(t));
       })
-      .catch(() => toast.error("Failed to load token list"));
+      .catch((e) => {
+        console.error("Failed to load token list", e);
+        toast.error(`Failed to load token list: ${e?.message ?? e}`);
+      });
     return () => {
       alive = false;
     };
