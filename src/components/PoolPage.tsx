@@ -159,6 +159,8 @@ function AddLiquidityCard({
   const [allowB, setAllowB] = useState<bigint>(0n);
   const [slippage] = useState(DEFAULT_SLIPPAGE);
   const [pending, setPending] = useState<string | null>(null);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successData, setSuccessData] = useState<{ title: string; description?: string; hash?: string }>({ title: "" });
 
   const a = lockedPair?.a ?? uiTokens[aIdx];
   const b = lockedPair?.b ?? uiTokens[bIdx];
@@ -317,11 +319,12 @@ function AddLiquidityCard({
       }
       toast.message("Adding liquidity…", { description: "Waiting for confirmation." });
       const rc = await tx.wait();
-      toast.success("Liquidity added ✓", {
-        action: rc?.hash
-          ? { label: "View", onClick: () => window.open(explorerTx(rc.hash), "_blank") }
-          : undefined,
+      setSuccessData({
+        title: "Liquidity added",
+        description: `${a.symbol} + ${b.symbol} added to the pool.`,
+        hash: rc?.hash,
       });
+      setSuccessOpen(true);
       setAmountA("");
       setAmountB("");
       onComplete();
@@ -336,6 +339,14 @@ function AddLiquidityCard({
 
   return (
     <div className="card-panel p-5">
+      <SuccessDialog
+        open={successOpen}
+        onClose={() => setSuccessOpen(false)}
+        title={successData.title}
+        description={successData.description}
+        txHash={successData.hash}
+        explorerUrl={successData.hash ? explorerTx(successData.hash) : undefined}
+      />
       <div className="mb-3 text-sm font-semibold">Add liquidity</div>
       <SideRow
         label="Token A"
