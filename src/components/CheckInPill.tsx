@@ -18,8 +18,9 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
     return () => clearInterval(t);
   }, []);
 
-  const refresh = useCallback(async () => {
-    if (!address || !checkInAddress) return;
+  // Reads the on-chain state and returns the freshly read streak (or null).
+  const refresh = useCallback(async (): Promise<bigint | null> => {
+    if (!address || !checkInAddress) return null;
     try {
       const provider = await getProvider();
       const c = new Contract(checkInAddress, CHECKIN_ABI, provider);
@@ -29,11 +30,17 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
         c.getReward(address),
       ]);
       if (results[0].status === "fulfilled") setCanCheckIn(Boolean(results[0].value));
-      if (results[1].status === "fulfilled") setStreak(BigInt(results[1].value));
+      let fresh: bigint | null = null;
+      if (results[1].status === "fulfilled") {
+        fresh = BigInt(results[1].value);
+        setStreak(fresh);
+      }
       if (results[2].status === "fulfilled") setReward(BigInt(results[2].value));
+      return fresh;
     } catch (e) {
       console.error("check-in refresh failed", e);
       setCanCheckIn(null);
+      return null;
     }
   }, [address, checkInAddress]);
 
@@ -44,6 +51,7 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
   const doCheckIn = async () => {
     if (!address || !checkInAddress) return;
     setPending(true);
+    const prevStreak = streak;
     try {
       await ensureGiwaNetwork();
       const provider = await getProvider();
@@ -59,7 +67,13 @@ export function CheckInPill({ checkInAddress }: { checkInAddress?: string }) {
           : undefined,
       });
       bumpRefresh();
-      refresh();
+      // Re-read the streak straight from the contract. Some RPC nodes lag a
+      // block behind the receipt, so poll briefly until the value moves.
+      for (let i = 0; i < 8; i++) {
+        const fresh = await refresh();
+        if (fresh !== null && fresh > prevStreak) break;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
     } catch (e: any) {
       toast.error(decodeWalletError(e));
     } finally {
